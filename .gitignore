@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-portable/
+dist-portable-new/
+
+# Tauri / Rust
+src-tauri/target/
+
+# Bundled JRE (large, should be downloaded separately)
+src-tauri/resources/jre/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Windows reserved names
+nul
+src-tauri/nul
+
+# Large binary files (download separately)
+src-tauri/resources/plantuml.jar

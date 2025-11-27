@@ -4,6 +4,9 @@ use std::sync::Mutex;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 pub const DEFAULT_PORT: u16 = 18123;
 
 // Global server process handle
@@ -109,15 +112,23 @@ pub fn start_server(app: &AppHandle) -> Result<ServerStatus, String> {
     // Start the server process
     // PlantUML picoweb mode: java -jar plantuml.jar -picoweb:PORT
     // Use Stdio::null() to prevent output buffer from filling up and blocking Java
-    let child = Command::new(&java_path)
-        .args([
-            "-jar",
-            jar_path_normalized,
-            &format!("-picoweb:{}", port),
-        ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    let mut cmd = Command::new(&java_path);
+    cmd.args([
+        "-jar",
+        jar_path_normalized,
+        &format!("-picoweb:{}", port),
+    ])
+    .stdout(Stdio::null())
+    .stderr(Stdio::null());
+
+    // On Windows, hide the console window
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let child = cmd.spawn()
         .map_err(|e| format!("Failed to start PlantUML server: {}. Make sure Java is installed.", e))?;
 
     // Store the process handle and port

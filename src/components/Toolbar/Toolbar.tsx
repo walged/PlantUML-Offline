@@ -4,6 +4,7 @@ import { useSettingsStore, useTranslation, type Language, type Theme } from "../
 import { useServerStore, EMBEDDED_SERVER_URL } from "../../stores/serverStore";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, writeFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
 import {
   startEmbeddedServer,
   stopEmbeddedServer,
@@ -500,7 +501,7 @@ function AboutPanel() {
       </div>
 
       <h3>PlantUML Editor</h3>
-      <p className="version">{t.version} 0.1.0</p>
+      <p className="version">{t.version} 0.1.1</p>
 
       <p className="description">{t.description}</p>
 
@@ -518,34 +519,36 @@ function AboutPanel() {
       <div className="about-links">
         <p>
           <strong>{t.developer}:</strong>{" "}
-          <span className="developer-name">WALGED</span>
+          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://t.me/walged"); }}>
+            WALGED
+          </a>
         </p>
         <p>
           <strong>{t.website}:</strong>{" "}
-          <a href="https://arthurdev.ru" target="_blank" rel="noopener noreferrer">
+          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://arthurdev.ru"); }}>
             arthurdev.ru
           </a>
         </p>
         <p>
           <strong>{t.github}:</strong>{" "}
-          <a href="https://github.com/walged/PlantUML-Offline" target="_blank" rel="noopener noreferrer">
+          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://github.com/walged/PlantUML-Offline"); }}>
             github.com/walged/PlantUML-Offline
           </a>
         </p>
         <div className="about-divider" />
         <p>
           {t.poweredBy}{" "}
-          <a href="https://plantuml.com" target="_blank" rel="noopener noreferrer">
+          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://plantuml.com"); }}>
             PlantUML
           </a>
         </p>
         <p>
           {t.builtWith}{" "}
-          <a href="https://tauri.app" target="_blank" rel="noopener noreferrer">
+          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://tauri.app"); }}>
             Tauri
           </a>{" "}
           +{" "}
-          <a href="https://react.dev" target="_blank" rel="noopener noreferrer">
+          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://react.dev"); }}>
             React
           </a>
         </p>

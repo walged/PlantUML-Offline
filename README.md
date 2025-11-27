@@ -29,8 +29,8 @@ A modern desktop application for creating UML diagrams using PlantUML syntax. Wr
 ### From Source
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/plantuml-editor.git
-cd plantuml-editor
+git clone https://github.com/walged/PlantUML-Offline.git
+cd PlantUML-Offline
 
 # Install dependencies
 npm install

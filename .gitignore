@@ -9,9 +9,6 @@ dist-portable-new/
 # Tauri / Rust
 src-tauri/target/
 
-# Bundled JRE (large, should be downloaded separately)
-src-tauri/resources/jre/
-
 # IDE
 .vscode/
 .idea/
@@ -42,6 +39,3 @@ coverage/
 # Windows reserved names
 nul
 src-tauri/nul
-
-# Large binary files (download separately)
-src-tauri/resources/plantuml.jar

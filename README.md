@@ -1,6 +1,8 @@
 # PlantUML Offline
 
-A modern desktop application for creating UML diagrams using PlantUML syntax. Write code, see live preview.
+<img width="1800" height="1034" alt="Снимок экрана 2025-11-27 184535" src="https://github.com/user-attachments/assets/020331e4-a9fa-43e7-b061-cf239a304315" />
+
+<img width="1800" height="1034" alt="Снимок экрана 2025-11-27 184605" src="https://github.com/user-attachments/assets/da5f6c13-e4ea-4dbc-b75a-600d83eb1bac" />
 
 ## Features
 

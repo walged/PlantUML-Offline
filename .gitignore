@@ -39,3 +39,6 @@ coverage/
 # Windows reserved names
 nul
 src-tauri/nul
+
+# Claude
+CLAUDE.md

@@ -3,7 +3,7 @@ import { useEditorStore } from "../../stores/editorStore";
 import { useSettingsStore, useTranslation, type Language, type Theme } from "../../stores/settingsStore";
 import { useServerStore, EMBEDDED_SERVER_URL } from "../../stores/serverStore";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile, writeFile, readTextFile } from "@tauri-apps/plugin-fs";
 import {
   startEmbeddedServer,
   stopEmbeddedServer,
@@ -89,6 +89,32 @@ export function Toolbar() {
     }
   }, [activeFile, activeFileId, markFileSaved]);
 
+  const handleOpenFile = useCallback(async () => {
+    const selected = await openDialog({
+      multiple: false,
+      filters: [{ name: "PlantUML", extensions: ["puml", "plantuml", "pu", "wsd"] }],
+    });
+
+    if (selected && typeof selected === "string") {
+      const content = await readTextFile(selected);
+      // Extract filename from path
+      const fileName = selected.split(/[/\\]/).pop() || "diagram.puml";
+
+      // Create new file with the content
+      const { files } = useEditorStore.getState();
+      const newFile = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        content,
+        isModified: false,
+      };
+      useEditorStore.setState({
+        files: [...files, newFile],
+        activeFileId: newFile.id,
+      });
+    }
+  }, []);
+
   // Auto-save effect
   const { autoSave } = useSettingsStore();
   useEffect(() => {
@@ -114,6 +140,12 @@ export function Toolbar() {
               <path d="M9.5 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5L9.5 1zM4 2h5v3h3v9H4V2z"/>
             </svg>
             <span>{t.newFile}</span>
+          </button>
+          <button className="toolbar-btn" onClick={handleOpenFile} title={t.openFile}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5H9.62a2.5 2.5 0 0 1-1.768-.732L6.732 3.268A.5.5 0 0 0 6.379 3H2.5z"/>
+            </svg>
+            <span>{t.openFile}</span>
           </button>
           <button className="toolbar-btn" onClick={handleSave} title={t.save}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">

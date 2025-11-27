@@ -57,6 +57,7 @@ export const translations = {
   en: {
     // Toolbar
     newFile: "New",
+    openFile: "Open",
     exportSvg: "SVG",
     exportPng: "PNG",
     settings: "Settings",
@@ -160,6 +161,7 @@ export const translations = {
   ru: {
     // Toolbar
     newFile: "Новый",
+    openFile: "Открыть",
     exportSvg: "SVG",
     exportPng: "PNG",
     settings: "Настройки",

@@ -1,8 +1,26 @@
-# PlantUML Offline
+# 🌿 PlantUML Offline  
+A powerful offline UML diagram editor with Live Preview, Monaco Editor, and an embedded PlantUML server.
 
-<img width="1800" height="1034" alt="Снимок экрана 2025-11-27 184535" src="https://github.com/user-attachments/assets/020331e4-a9fa-43e7-b061-cf239a304315" />
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Tauri-2.0-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=white" />
+  <img src="https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript" />
+</p>
 
-<img width="1800" height="1034" alt="Снимок экрана 2025-11-27 184605" src="https://github.com/user-attachments/assets/da5f6c13-e4ea-4dbc-b75a-600d83eb1bac" />
+<p align="center">
+  <img width="800" src="https://github.com/user-attachments/assets/020331e4-a9fa-43e7-b061-cf239a304315"/>
+  <br/>
+  <img width="800" src="https://github.com/user-attachments/assets/da5f6c13-e4ea-4dbc-b75a-600d83eb1bac"/>
+</p>
+
+---
+
+<div align="center">
+
+### ✨ *PlantUML Offline — create UML diagrams fast, offline, and with a powerful preview engine.*
+
+</div>
 
 ## Features
 

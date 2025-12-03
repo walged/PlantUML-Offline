@@ -42,3 +42,4 @@ src-tauri/nul
 
 # Claude
 CLAUDE.md
+dist-product/

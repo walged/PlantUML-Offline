@@ -36,6 +36,60 @@ fn is_port_in_use(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_err()
 }
 
+/// Kill any process listening on the specified port (Windows)
+#[cfg(windows)]
+fn kill_process_on_port(port: u16) {
+    // Use netstat to find PID listening on the port
+    let output = Command::new("cmd")
+        .args(["/C", &format!("netstat -ano | findstr :{}", port)])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .output();
+
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Parse PIDs from netstat output and collect unique ones
+        let mut killed_pids = std::collections::HashSet::new();
+
+        for line in stdout.lines() {
+            // netstat output: TCP 127.0.0.1:18123 ... LISTENING 12345
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(pid_str) = parts.last() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    if pid > 0 && !killed_pids.contains(&pid) {
+                        println!("Killing process {} on port {}", pid, port);
+                        let _ = Command::new("taskkill")
+                            .args(["/F", "/T", "/PID", &pid.to_string()])
+                            .creation_flags(0x08000000)
+                            .output();
+                        killed_pids.insert(pid);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn kill_process_on_port(port: u16) {
+    // Use lsof on Unix to find and kill process
+    let output = Command::new("lsof")
+        .args(["-t", &format!("-i:{}", port)])
+        .output();
+
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for pid_str in stdout.lines() {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                println!("Killing process {} on port {}", pid, port);
+                unsafe {
+                    libc::kill(pid, libc::SIGKILL);
+                }
+            }
+        }
+    }
+}
+
 /// Get the path to the PlantUML JAR file
 fn get_plantuml_jar_path(app: &AppHandle) -> Option<PathBuf> {
     // In development, look in the resources folder
@@ -78,7 +132,7 @@ fn get_java_path(app: &AppHandle) -> String {
 
 /// Start the embedded PlantUML server
 pub fn start_server(app: &AppHandle) -> Result<ServerStatus, String> {
-    // Check if already running
+    // Check if already running (our tracked process)
     {
         let process = SERVER_PROCESS.lock().map_err(|e| e.to_string())?;
         if process.is_some() {
@@ -90,6 +144,13 @@ pub fn start_server(app: &AppHandle) -> Result<ServerStatus, String> {
                 error: None,
             });
         }
+    }
+
+    // Kill any orphaned server from previous session on our default port
+    if is_port_in_use(DEFAULT_PORT) {
+        println!("Found orphaned server on port {}, killing it...", DEFAULT_PORT);
+        kill_process_on_port(DEFAULT_PORT);
+        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 
     // Find PlantUML JAR
@@ -169,52 +230,32 @@ pub fn start_server(app: &AppHandle) -> Result<ServerStatus, String> {
 
 /// Stop the embedded PlantUML server
 pub fn stop_server() -> Result<(), String> {
-    let mut process = SERVER_PROCESS.lock().map_err(|e| e.to_string())?;
+    let port = *SERVER_PORT.lock().map_err(|e| e.to_string())?;
 
-    if let Some(mut child) = process.take() {
-        let pid = child.id();
-        println!("Stopping PlantUML server (PID: {})...", pid);
-
-        #[cfg(windows)]
-        {
-            // On Windows, use taskkill /T /F to kill the entire process tree
-            // This ensures all child processes (Java spawns) are also terminated
-            let kill_result = Command::new("taskkill")
-                .args(["/T", "/F", "/PID", &pid.to_string()])
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                .output();
-
-            match kill_result {
-                Ok(output) => {
-                    if output.status.success() {
-                        println!("PlantUML server process tree killed successfully");
-                    } else {
-                        // Fallback to regular kill if taskkill fails
-                        println!("taskkill failed, trying regular kill...");
-                        let _ = child.kill();
-                    }
-                }
-                Err(_) => {
-                    // Fallback to regular kill
-                    let _ = child.kill();
-                }
-            }
-        }
-
-        #[cfg(not(windows))]
-        {
-            // On Unix, try SIGTERM first, then SIGKILL
-            unsafe {
-                libc::kill(pid as i32, libc::SIGTERM);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(500));
+    // Clear our stored process handle
+    {
+        let mut process = SERVER_PROCESS.lock().map_err(|e| e.to_string())?;
+        if let Some(mut child) = process.take() {
             let _ = child.kill();
+            let _ = child.wait();
         }
-
-        let _ = child.wait();
-        println!("PlantUML server stopped");
     }
 
+    // Kill any process on our port (this is the reliable way)
+    println!("Stopping PlantUML server on port {}...", port);
+    kill_process_on_port(port);
+
+    // Give it a moment to die
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // Double-check and kill again if still running
+    if is_port_in_use(port) {
+        println!("Port {} still in use, killing again...", port);
+        kill_process_on_port(port);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    println!("PlantUML server stopped");
     Ok(())
 }
 

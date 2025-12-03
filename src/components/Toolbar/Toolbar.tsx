@@ -247,6 +247,7 @@ function SettingsPanel() {
     fontSize, setFontSize,
     renderDelay, setRenderDelay,
     autoSave, setAutoSave,
+    checkForUpdates, setCheckForUpdates,
     imageSavePath, setImageSavePath,
     plantUmlServer, setPlantUmlServer,
     useEmbeddedServer, setUseEmbeddedServer
@@ -401,6 +402,17 @@ function SettingsPanel() {
       </div>
 
       <div className="setting-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={checkForUpdates}
+            onChange={(e) => setCheckForUpdates(e.target.checked)}
+          />
+          {t.checkForUpdates}
+        </label>
+      </div>
+
+      <div className="setting-group">
         <label>{t.imageSavePath}</label>
         <div className="setting-path">
           <input
@@ -501,7 +513,7 @@ function AboutPanel() {
       </div>
 
       <h3>PlantUML Editor</h3>
-      <p className="version">{t.version} 0.1.2</p>
+      <p className="version">{t.version} 0.1.3</p>
 
       <p className="description">{t.description}</p>
 

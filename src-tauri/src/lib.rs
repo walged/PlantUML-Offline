@@ -1,4 +1,6 @@
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{RunEvent, WindowEvent};
+#[cfg(debug_assertions)]
+use tauri::Manager;
 
 mod commands;
 mod plantuml_server;

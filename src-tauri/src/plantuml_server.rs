@@ -172,21 +172,40 @@ pub fn stop_server() -> Result<(), String> {
     let mut process = SERVER_PROCESS.lock().map_err(|e| e.to_string())?;
 
     if let Some(mut child) = process.take() {
-        println!("Stopping PlantUML server...");
+        let pid = child.id();
+        println!("Stopping PlantUML server (PID: {})...", pid);
 
-        // Try graceful shutdown first
         #[cfg(windows)]
         {
-            // On Windows, we need to kill the process
-            let _ = child.kill();
+            // On Windows, use taskkill /T /F to kill the entire process tree
+            // This ensures all child processes (Java spawns) are also terminated
+            let kill_result = Command::new("taskkill")
+                .args(["/T", "/F", "/PID", &pid.to_string()])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output();
+
+            match kill_result {
+                Ok(output) => {
+                    if output.status.success() {
+                        println!("PlantUML server process tree killed successfully");
+                    } else {
+                        // Fallback to regular kill if taskkill fails
+                        println!("taskkill failed, trying regular kill...");
+                        let _ = child.kill();
+                    }
+                }
+                Err(_) => {
+                    // Fallback to regular kill
+                    let _ = child.kill();
+                }
+            }
         }
 
         #[cfg(not(windows))]
         {
-            use std::os::unix::process::CommandExt;
-            // On Unix, try SIGTERM first
+            // On Unix, try SIGTERM first, then SIGKILL
             unsafe {
-                libc::kill(child.id() as i32, libc::SIGTERM);
+                libc::kill(pid as i32, libc::SIGTERM);
             }
             std::thread::sleep(std::time::Duration::from_millis(500));
             let _ = child.kill();

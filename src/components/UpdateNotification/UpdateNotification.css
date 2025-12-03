@@ -1,0 +1,91 @@
+.update-modal {
+  min-width: 350px;
+  max-width: 400px;
+}
+
+.update-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.update-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.update-message {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.update-versions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background-color: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.current-version {
+  color: var(--text-secondary);
+}
+
+.arrow {
+  color: var(--accent-color);
+  font-size: 16px;
+}
+
+.new-version {
+  color: var(--accent-color);
+}
+
+.release-name {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.update-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.update-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.update-btn.primary {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.update-btn.primary:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.update-btn.secondary {
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.update-btn.secondary:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}

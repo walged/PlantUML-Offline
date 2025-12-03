@@ -1,13 +1,15 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import Split from "react-split";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { Editor } from "./components/Editor/Editor";
 import { Preview } from "./components/Preview/Preview";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ServerStatus } from "./components/ServerStatus/ServerStatus";
+import { UpdateNotification } from "./components/UpdateNotification/UpdateNotification";
 import { useEditorStore } from "./stores/editorStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useServerStore } from "./stores/serverStore";
+import { checkForUpdates, UpdateInfo } from "./lib/updater";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
@@ -16,12 +18,36 @@ import "./styles/App.css";
 function App() {
   const { initializeStore } = useEditorStore();
   const theme = useSettingsStore((state) => state.theme);
+  const checkForUpdatesEnabled = useSettingsStore((state) => state.checkForUpdates);
   const { checkServerStatus, checkServerStatusWithRetry } = useServerStore();
   const unlistenRef = useRef<(() => void) | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
 
   useEffect(() => {
     initializeStore();
   }, [initializeStore]);
+
+  // Check for updates on startup
+  useEffect(() => {
+    if (!checkForUpdatesEnabled) return;
+
+    const checkUpdates = async () => {
+      try {
+        const info = await checkForUpdates();
+        if (info.available) {
+          setUpdateInfo(info);
+          setShowUpdateNotification(true);
+        }
+      } catch (error) {
+        console.error("Failed to check for updates:", error);
+      }
+    };
+
+    // Delay update check to not interfere with app startup
+    const timeout = setTimeout(checkUpdates, 3000);
+    return () => clearTimeout(timeout);
+  }, [checkForUpdatesEnabled]);
 
   // Check server status on startup (after 5 sec with retries for embedded server) and every 10 minutes
   useEffect(() => {
@@ -192,6 +218,12 @@ function App() {
         </Split>
       </div>
       <ServerStatus />
+      {showUpdateNotification && updateInfo && (
+        <UpdateNotification
+          updateInfo={updateInfo}
+          onClose={() => setShowUpdateNotification(false)}
+        />
+      )}
     </div>
   );
 }

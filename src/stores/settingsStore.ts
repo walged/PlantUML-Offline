@@ -13,6 +13,7 @@ interface SettingsState {
   autoSave: boolean;
   plantUmlServer: string;
   useEmbeddedServer: boolean;
+  checkForUpdates: boolean;
 
   // Actions
   setLanguage: (lang: Language) => void;
@@ -23,6 +24,7 @@ interface SettingsState {
   setAutoSave: (enabled: boolean) => void;
   setPlantUmlServer: (server: string) => void;
   setUseEmbeddedServer: (use: boolean) => void;
+  setCheckForUpdates: (check: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -36,6 +38,7 @@ export const useSettingsStore = create<SettingsState>()(
       autoSave: true,
       plantUmlServer: "http://localhost:18123", // Default to embedded server
       useEmbeddedServer: true, // Default to embedded server for offline support
+      checkForUpdates: true, // Check for updates on startup by default
 
       setLanguage: (language) => set({ language }),
       setTheme: (theme) => set({ theme }),
@@ -45,6 +48,7 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoSave: (autoSave) => set({ autoSave }),
       setPlantUmlServer: (plantUmlServer) => set({ plantUmlServer }),
       setUseEmbeddedServer: (useEmbeddedServer) => set({ useEmbeddedServer }),
+      setCheckForUpdates: (checkForUpdates) => set({ checkForUpdates }),
     }),
     {
       name: "plantuml-editor-settings",
@@ -165,6 +169,17 @@ export const translations = {
     retryConnection: "Retry Connection",
     restartServer: "Restart Server",
     restarting: "Restarting...",
+
+    // Updates
+    checkForUpdates: "Check for updates on startup",
+    updateAvailable: "Update Available",
+    newVersionAvailable: "A new version {version} is available!",
+    currentVersion: "Current version",
+    download: "Download",
+    later: "Later",
+    checkingForUpdates: "Checking for updates...",
+    noUpdatesAvailable: "You have the latest version",
+    updateCheckFailed: "Could not check for updates",
   },
   ru: {
     // Toolbar
@@ -277,6 +292,17 @@ export const translations = {
     retryConnection: "Повторить",
     restartServer: "Перезапустить сервер",
     restarting: "Перезапуск...",
+
+    // Updates
+    checkForUpdates: "Проверять обновления при запуске",
+    updateAvailable: "Доступно обновление",
+    newVersionAvailable: "Доступна новая версия {version}!",
+    currentVersion: "Текущая версия",
+    download: "Скачать",
+    later: "Позже",
+    checkingForUpdates: "Проверка обновлений...",
+    noUpdatesAvailable: "У вас установлена последняя версия",
+    updateCheckFailed: "Не удалось проверить обновления",
   },
 };
 

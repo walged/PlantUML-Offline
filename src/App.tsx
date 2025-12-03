@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import Split from "react-split";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { Editor } from "./components/Editor/Editor";
@@ -9,6 +9,8 @@ import { useEditorStore } from "./stores/editorStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useServerStore } from "./stores/serverStore";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import "./styles/App.css";
 
 function App() {
@@ -89,6 +91,89 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  // Global keyboard shortcuts
+  const handleSave = useCallback(async () => {
+    const { getActiveFile, activeFileId, markFileSaved } = useEditorStore.getState();
+    const activeFile = getActiveFile();
+    if (!activeFile) return;
+
+    const filePath = await saveDialog({
+      defaultPath: activeFile.name,
+      filters: [{ name: "PlantUML", extensions: ["puml"] }],
+    });
+
+    if (filePath) {
+      await writeTextFile(filePath, activeFile.content);
+      if (activeFileId) {
+        markFileSaved(activeFileId);
+      }
+    }
+  }, []);
+
+  const handleOpen = useCallback(async () => {
+    const selected = await openDialog({
+      multiple: false,
+      filters: [{ name: "PlantUML", extensions: ["puml", "plantuml", "pu", "wsd"] }],
+    });
+
+    if (selected && typeof selected === "string") {
+      const content = await readTextFile(selected);
+      const fileName = selected.split(/[/\\]/).pop() || "diagram.puml";
+
+      const { files } = useEditorStore.getState();
+      const newFile = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        content,
+        isModified: false,
+      };
+      useEditorStore.setState({
+        files: [...files, newFile],
+        activeFileId: newFile.id,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S - Save
+      if (e.ctrlKey && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+      // Ctrl+O - Open
+      if (e.ctrlKey && e.key === "o") {
+        e.preventDefault();
+        handleOpen();
+      }
+      // Ctrl+N - New file
+      if (e.ctrlKey && e.key === "n") {
+        e.preventDefault();
+        useEditorStore.getState().createNewFile();
+      }
+      // Ctrl+Z - Undo (handled by Monaco, but add fallback)
+      if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
+        // Let Monaco handle it if editor is focused
+        const activeElement = document.activeElement;
+        if (!activeElement?.closest(".monaco-editor")) {
+          e.preventDefault();
+          useEditorStore.getState().undo();
+        }
+      }
+      // Ctrl+Y or Ctrl+Shift+Z - Redo
+      if ((e.ctrlKey && e.key === "y") || (e.ctrlKey && e.shiftKey && e.key === "z")) {
+        const activeElement = document.activeElement;
+        if (!activeElement?.closest(".monaco-editor")) {
+          e.preventDefault();
+          useEditorStore.getState().redo();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSave, handleOpen]);
 
   return (
     <div className="app">

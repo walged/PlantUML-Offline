@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useEditorStore } from "../../stores/editorStore";
 import { useTranslation } from "../../stores/settingsStore";
-import { confirm } from "@tauri-apps/plugin-dialog";
 import "./Sidebar.css";
 
 const TEMPLATES = [
@@ -193,7 +192,7 @@ Product ||--o{ OrderItem
 ];
 
 export function Sidebar() {
-  const { sidebarVisible, files, activeFileId, openFile, createNewFile, setContent, renameFile } = useEditorStore();
+  const { sidebarVisible, files, activeFileId, openFile, createNewFile, renameFile } = useEditorStore();
   const t = useTranslation();
   const [activeTab, setActiveTab] = useState<"files" | "templates">("files");
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
@@ -212,40 +211,14 @@ export function Sidebar() {
     return null;
   }
 
-  const handleTemplateClick = async (template: typeof TEMPLATES[0]) => {
-    const store = useEditorStore.getState();
-    const activeFile = store.getActiveFile();
+  const handleTemplateClick = (template: typeof TEMPLATES[0]) => {
     const fileName = `${template.name.toLowerCase().replace(/\s+/g, "-")}.puml`;
 
-    // Если нет активного файла - создаём новый
-    if (!activeFile) {
-      createNewFile(fileName);
-      setTimeout(() => {
-        useEditorStore.getState().setContent(template.code);
-      }, 0);
-      return;
-    }
-
-    // Если файл пустой или только @startuml/@enduml - заменяем без подтверждения
-    const currentContent = activeFile.content.trim();
-    const isEmpty = !currentContent ||
-      currentContent === "@startuml\n\n@enduml" ||
-      currentContent === "@startuml\n@enduml";
-
-    if (isEmpty) {
-      setContent(template.code);
-      return;
-    }
-
-    // Если есть контент - запрашиваем подтверждение через Tauri dialog
-    const confirmed = await confirm(
-      t.replaceWithTemplate.replace("{template}", template.name),
-      { title: t.confirmReplace, kind: "warning" }
-    );
-
-    if (confirmed) {
-      setContent(template.code);
-    }
+    // Всегда создаём новый файл с шаблоном
+    createNewFile(fileName);
+    setTimeout(() => {
+      useEditorStore.getState().setContent(template.code);
+    }, 0);
   };
 
   const handleStartRename = (fileId: string, currentName: string) => {
@@ -281,13 +254,13 @@ export function Sidebar() {
           className={`sidebar-tab ${activeTab === "files" ? "active" : ""}`}
           onClick={() => setActiveTab("files")}
         >
-          Files
+          {t.files}
         </button>
         <button
           className={`sidebar-tab ${activeTab === "templates" ? "active" : ""}`}
           onClick={() => setActiveTab("templates")}
         >
-          Templates
+          {t.templates}
         </button>
       </div>
 

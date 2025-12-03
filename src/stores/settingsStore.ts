@@ -74,9 +74,15 @@ export const translations = {
     createOrOpen: "Create a new file or open an existing one",
 
     // Preview
+    preview: "Preview",
     zoom: "Zoom",
+    zoomIn: "Zoom In",
+    zoomOut: "Zoom Out",
     fitToView: "Fit to View",
-    resetZoom: "Reset Zoom",
+    resetZoom: "Reset View",
+    rendering: "Rendering...",
+    noPreview: "No preview available",
+    writeCode: "Write PlantUML code to see the preview",
 
     // Settings
     settingsTitle: "Settings",
@@ -157,6 +163,8 @@ export const translations = {
     localServerHint: "Then set server URL to:",
     dismiss: "Dismiss",
     retryConnection: "Retry Connection",
+    restartServer: "Restart Server",
+    restarting: "Restarting...",
   },
   ru: {
     // Toolbar
@@ -178,9 +186,15 @@ export const translations = {
     createOrOpen: "Создайте новый файл или откройте существующий",
 
     // Preview
+    preview: "Предпросмотр",
     zoom: "Масштаб",
+    zoomIn: "Увеличить",
+    zoomOut: "Уменьшить",
     fitToView: "По размеру",
-    resetZoom: "Сбросить",
+    resetZoom: "Сбросить вид",
+    rendering: "Рендеринг...",
+    noPreview: "Предпросмотр недоступен",
+    writeCode: "Напишите код PlantUML для просмотра",
 
     // Settings
     settingsTitle: "Настройки",
@@ -261,6 +275,8 @@ export const translations = {
     localServerHint: "Затем укажите URL сервера:",
     dismiss: "Закрыть",
     retryConnection: "Повторить",
+    restartServer: "Перезапустить сервер",
+    restarting: "Перезапуск...",
   },
 };
 

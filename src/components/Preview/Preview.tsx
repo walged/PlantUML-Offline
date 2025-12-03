@@ -1,17 +1,55 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditorStore } from "../../stores/editorStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useTranslation } from "../../stores/settingsStore";
 import { renderPlantUML } from "../../lib/plantuml/renderer";
+import { restartEmbeddedServer } from "../../lib/plantuml/embeddedServer";
 import "./Preview.css";
 
 export function Preview() {
   const { getActiveFile, previewSvg, setPreviewSvg, isRendering, setIsRendering, error, setError } = useEditorStore();
+  const { setEmbeddedServerStatus, checkServerStatusWithRetry } = useServerStore();
+  const t = useTranslation();
   const activeFile = getActiveFile();
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isRestarting, setIsRestarting] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout>();
+
+  // Restart server handler
+  const handleRestartServer = useCallback(async () => {
+    setIsRestarting(true);
+    setError(null);
+    try {
+      const status = await restartEmbeddedServer();
+      setEmbeddedServerStatus(status.running, status.error);
+      if (status.running) {
+        // Wait for server to be ready then re-render
+        setTimeout(async () => {
+          await checkServerStatusWithRetry(5, 1000);
+          // Trigger re-render
+          if (activeFile?.content) {
+            setIsRendering(true);
+            try {
+              const svg = await renderPlantUML(activeFile.content);
+              setPreviewSvg(svg);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Rendering failed");
+            } finally {
+              setIsRendering(false);
+            }
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to restart server");
+    } finally {
+      setIsRestarting(false);
+    }
+  }, [activeFile?.content, setError, setEmbeddedServerStatus, checkServerStatusWithRetry, setIsRendering, setPreviewSvg]);
 
   // Callback ref for container
   const containerRef = useCallback((node: HTMLDivElement | null) => {
@@ -90,7 +128,7 @@ export function Preview() {
   if (!activeFile) {
     return (
       <div className="preview-container preview-empty">
-        <p>No preview available</p>
+        <p>{t.noPreview}</p>
       </div>
     );
   }
@@ -98,16 +136,16 @@ export function Preview() {
   return (
     <div className="preview-container">
       <div className="preview-header">
-        <span className="preview-title">Preview</span>
+        <span className="preview-title">{t.preview}</span>
         <div className="preview-controls">
-          <button onClick={() => setZoom((z) => Math.max(0.1, z - 0.25))} title="Zoom Out">
+          <button onClick={() => setZoom((z) => Math.max(0.1, z - 0.25))} title={t.zoomOut}>
             −
           </button>
           <span className="zoom-level">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((z) => Math.min(5, z + 0.25))} title="Zoom In">
+          <button onClick={() => setZoom((z) => Math.min(5, z + 0.25))} title={t.zoomIn}>
             +
           </button>
-          <button onClick={resetView} title="Reset View">
+          <button onClick={resetView} title={t.resetZoom}>
             ⟲
           </button>
         </div>
@@ -124,7 +162,7 @@ export function Preview() {
         {isRendering && (
           <div className="preview-loading">
             <div className="spinner" />
-            <span>Rendering...</span>
+            <span>{t.rendering}</span>
           </div>
         )}
 
@@ -132,6 +170,15 @@ export function Preview() {
           <div className="preview-error">
             <span className="error-icon">⚠</span>
             <span>{error}</span>
+            {(error.includes("internet") || error.includes("connection") || error.includes("server")) && (
+              <button
+                className="restart-server-btn"
+                onClick={handleRestartServer}
+                disabled={isRestarting}
+              >
+                {isRestarting ? t.restarting || "Restarting..." : t.restartServer || "Restart Server"}
+              </button>
+            )}
           </div>
         )}
 
@@ -147,7 +194,7 @@ export function Preview() {
 
         {!isRendering && !error && !previewSvg && (
           <div className="preview-placeholder">
-            <p>Write PlantUML code to see the preview</p>
+            <p>{t.writeCode}</p>
           </div>
         )}
       </div>

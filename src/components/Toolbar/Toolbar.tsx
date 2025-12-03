@@ -513,7 +513,7 @@ function AboutPanel() {
       </div>
 
       <h3>PlantUML Editor</h3>
-      <p className="version">{t.version} 0.1.3</p>
+      <p className="version">{t.version} 0.1.4</p>
 
       <p className="description">{t.description}</p>
 

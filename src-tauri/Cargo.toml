@@ -1,6 +1,6 @@
 [package]
 name = "plantuml-editor"
-version = "0.1.3"
+version = "0.1.4"
 description = "PlantUML Desktop Editor"
 authors = ["you"]
 edition = "2021"

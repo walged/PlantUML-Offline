@@ -23,7 +23,7 @@ export interface UpdateInfo {
 }
 
 // Current app version - should match Cargo.toml and package.json
-export const APP_VERSION = "0.1.3";
+export const APP_VERSION = "0.1.4";
 
 const GITHUB_REPO = "walged/PlantUML-Offline";
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;

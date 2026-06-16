@@ -98,7 +98,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -123,8 +124,11 @@
 .modal {
   background-color: var(--bg-secondary);
   border-radius: 8px;
-  min-width: 400px;
-  max-width: 500px;
+  width: min(500px, 92vw);
+  min-width: 0;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--border-color);
 }
@@ -167,6 +171,30 @@
 
 .modal-content {
   padding: 20px;
+  overflow-y: auto;
+}
+
+/* AI settings section inside the settings modal */
+.settings-section-title {
+  margin: 8px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  cursor: pointer;
+  padding: 4px 0 0;
+  font-size: 12px;
+  text-align: left;
+}
+.link-btn:hover {
+  text-decoration: underline;
 }
 
 /* Settings Panel */

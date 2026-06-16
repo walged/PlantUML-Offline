@@ -2,6 +2,7 @@ use tauri::{RunEvent, WindowEvent};
 #[cfg(debug_assertions)]
 use tauri::Manager;
 
+mod ai;
 mod commands;
 mod plantuml_server;
 
@@ -19,6 +20,8 @@ pub fn run() {
             commands::stop_plantuml_server,
             commands::get_plantuml_server_status,
             commands::restart_plantuml_server,
+            commands::get_plantuml_server_log,
+            commands::ai_chat,
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

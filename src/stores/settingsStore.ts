@@ -1,8 +1,78 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { safeJSONStorage } from "../lib/safeStorage";
 
 export type Language = "en" | "ru";
 export type Theme = "dark" | "light";
+
+/** Built-in AI provider presets. "custom" lets the user enter any base URL. */
+export type AiProvider = "openrouter" | "deepseek" | "openai" | "anthropic" | "custom";
+
+export interface AiProviderPreset {
+  id: AiProvider;
+  label: string;
+  baseUrl: string;
+  defaultModel: string;
+  /** Suggested models for the model dropdown. */
+  models: string[];
+  /** Where to get an API key. */
+  keyUrl?: string;
+}
+
+/**
+ * Provider presets. OpenRouter is the default: one key gives access to many
+ * models, it is OpenAI-compatible, and it is reachable from CIS. Any other
+ * OpenAI-compatible endpoint (Qwen/DashScope, Kie.AI, local Ollama, …) works via
+ * the "custom" preset.
+ */
+export const AI_PROVIDERS: AiProviderPreset[] = [
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    defaultModel: "anthropic/claude-opus-4-8",
+    models: [
+      "anthropic/claude-opus-4-8",
+      "anthropic/claude-sonnet-4-6",
+      "openai/gpt-4o",
+      "deepseek/deepseek-chat",
+      "qwen/qwen-2.5-coder-32b-instruct",
+      "google/gemini-2.0-flash-001",
+    ],
+    keyUrl: "https://openrouter.ai/keys",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com",
+    defaultModel: "deepseek-chat",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+    keyUrl: "https://platform.deepseek.com/api_keys",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-4o",
+    models: ["gpt-4o", "gpt-4o-mini"],
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    baseUrl: "https://api.anthropic.com/v1",
+    defaultModel: "claude-opus-4-8",
+    models: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
+    keyUrl: "https://console.anthropic.com/settings/keys",
+  },
+  {
+    id: "custom",
+    label: "Custom (OpenAI-compatible)",
+    baseUrl: "",
+    defaultModel: "",
+    models: [],
+  },
+];
 
 interface SettingsState {
   language: Language;
@@ -15,6 +85,13 @@ interface SettingsState {
   useEmbeddedServer: boolean;
   checkForUpdates: boolean;
 
+  // AI settings. Note: the API key is stored locally on the user's machine for
+  // a single-user desktop app with a user-supplied key.
+  aiProvider: AiProvider;
+  aiApiKey: string;
+  aiModel: string;
+  aiCustomBaseUrl: string;
+
   // Actions
   setLanguage: (lang: Language) => void;
   setTheme: (theme: Theme) => void;
@@ -25,6 +102,10 @@ interface SettingsState {
   setPlantUmlServer: (server: string) => void;
   setUseEmbeddedServer: (use: boolean) => void;
   setCheckForUpdates: (check: boolean) => void;
+  setAiProvider: (provider: AiProvider) => void;
+  setAiApiKey: (key: string) => void;
+  setAiModel: (model: string) => void;
+  setAiCustomBaseUrl: (url: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -40,6 +121,11 @@ export const useSettingsStore = create<SettingsState>()(
       useEmbeddedServer: true, // Default to embedded server for offline support
       checkForUpdates: true, // Check for updates on startup by default
 
+      aiProvider: "openrouter",
+      aiApiKey: "",
+      aiModel: "anthropic/claude-opus-4-8",
+      aiCustomBaseUrl: "",
+
       setLanguage: (language) => set({ language }),
       setTheme: (theme) => set({ theme }),
       setImageSavePath: (imageSavePath) => set({ imageSavePath }),
@@ -49,11 +135,16 @@ export const useSettingsStore = create<SettingsState>()(
       setPlantUmlServer: (plantUmlServer) => set({ plantUmlServer }),
       setUseEmbeddedServer: (useEmbeddedServer) => set({ useEmbeddedServer }),
       setCheckForUpdates: (checkForUpdates) => set({ checkForUpdates }),
+      setAiProvider: (aiProvider) => set({ aiProvider }),
+      setAiApiKey: (aiApiKey) => set({ aiApiKey }),
+      setAiModel: (aiModel) => set({ aiModel }),
+      setAiCustomBaseUrl: (aiCustomBaseUrl) => set({ aiCustomBaseUrl }),
     }),
     {
       name: "plantuml-editor-settings",
-    }
-  )
+      storage: createJSONStorage(() => safeJSONStorage),
+    },
+  ),
 );
 
 // Translations
@@ -116,7 +207,8 @@ export const translations = {
     // About
     aboutTitle: "About PlantUML Offline",
     version: "Version",
-    description: "A modern desktop editor for creating UML diagrams using PlantUML syntax. Write code, see live preview.",
+    description:
+      "A modern desktop editor for creating UML diagrams using PlantUML syntax. Write code, see live preview.",
     features: "Features",
     feature1: "Monaco Editor with PlantUML syntax highlighting",
     feature2: "Live diagram preview",
@@ -140,11 +232,12 @@ export const translations = {
     templateMindmap: "Mind Map",
 
     // Dialogs
-    replaceContent: "Replace current content with \"{name}\" template?",
+    replaceContent: 'Replace current content with "{name}" template?',
     replaceWarning: "This will overwrite your existing code.",
     selectImageFolder: "Select folder to save images",
     confirmReplace: "Confirm Replace",
-    replaceWithTemplate: "Replace current content with \"{template}\" template?\n\nThis will overwrite your existing code.",
+    replaceWithTemplate:
+      'Replace current content with "{template}" template?\n\nThis will overwrite your existing code.',
 
     // Sidebar
     openFiles: "Open Files",
@@ -180,6 +273,36 @@ export const translations = {
     checkingForUpdates: "Checking for updates...",
     noUpdatesAvailable: "You have the latest version",
     updateCheckFailed: "Could not check for updates",
+
+    // AI
+    aiAssistant: "AI Assistant",
+    aiSettings: "AI Assistant",
+    aiProvider: "Provider",
+    aiApiKey: "API Key",
+    aiModel: "Model",
+    aiCustomBaseUrl: "Custom base URL",
+    aiCustomBaseUrlHint: "OpenAI-compatible endpoint (DeepSeek, Qwen, Kie.AI, Ollama, …)",
+    aiGetKey: "Get API key",
+    aiKeyStoredLocally: "The key is stored locally on this device.",
+    aiNoKey: "Add an AI API key in Settings → AI Assistant to use this feature.",
+    aiGenerateFromText: "Generate from description",
+    aiGeneratePrompt: "Describe the diagram you want",
+    aiGeneratePlaceholder: "e.g. class diagram for an online shop with User, Order, Product",
+    aiGenerate: "Generate",
+    aiGenerating: "Generating…",
+    aiFixError: "Fix with AI",
+    aiFixing: "Fixing…",
+    aiExplain: "Explain",
+    aiImprove: "Improve / refactor",
+    aiSend: "Send",
+    aiThinking: "Thinking…",
+    aiChatPlaceholder: "Ask to add a class, change layout, convert diagram type…",
+    aiApply: "Apply to editor",
+    aiInsert: "Insert",
+    aiCopy: "Copy",
+    aiClear: "Clear chat",
+    aiError: "AI request failed",
+    aiOpenPanel: "AI Assistant",
   },
   ru: {
     // Toolbar
@@ -239,7 +362,8 @@ export const translations = {
     // About
     aboutTitle: "О программе PlantUML Offline",
     version: "Версия",
-    description: "Современный редактор для создания UML-диаграмм с использованием синтаксиса PlantUML. Пишите код, смотрите результат.",
+    description:
+      "Современный редактор для создания UML-диаграмм с использованием синтаксиса PlantUML. Пишите код, смотрите результат.",
     features: "Возможности",
     feature1: "Monaco Editor с подсветкой синтаксиса PlantUML",
     feature2: "Предпросмотр диаграмм в реальном времени",
@@ -263,11 +387,12 @@ export const translations = {
     templateMindmap: "Интеллект-карта",
 
     // Dialogs
-    replaceContent: "Заменить текущий контент шаблоном \"{name}\"?",
+    replaceContent: 'Заменить текущий контент шаблоном "{name}"?',
     replaceWarning: "Это перезапишет ваш существующий код.",
     selectImageFolder: "Выберите папку для сохранения изображений",
     confirmReplace: "Подтверждение замены",
-    replaceWithTemplate: "Заменить текущий контент шаблоном \"{template}\"?\n\nЭто перезапишет ваш существующий код.",
+    replaceWithTemplate:
+      'Заменить текущий контент шаблоном "{template}"?\n\nЭто перезапишет ваш существующий код.',
 
     // Sidebar
     openFiles: "Открытые файлы",
@@ -303,6 +428,36 @@ export const translations = {
     checkingForUpdates: "Проверка обновлений...",
     noUpdatesAvailable: "У вас установлена последняя версия",
     updateCheckFailed: "Не удалось проверить обновления",
+
+    // AI
+    aiAssistant: "ИИ-ассистент",
+    aiSettings: "ИИ-ассистент",
+    aiProvider: "Провайдер",
+    aiApiKey: "API-ключ",
+    aiModel: "Модель",
+    aiCustomBaseUrl: "Свой базовый URL",
+    aiCustomBaseUrlHint: "OpenAI-совместимый эндпоинт (DeepSeek, Qwen, Kie.AI, Ollama, …)",
+    aiGetKey: "Получить API-ключ",
+    aiKeyStoredLocally: "Ключ хранится локально на этом устройстве.",
+    aiNoKey: "Добавьте API-ключ в Настройки → ИИ-ассистент, чтобы использовать эту функцию.",
+    aiGenerateFromText: "Сгенерировать по описанию",
+    aiGeneratePrompt: "Опишите нужную диаграмму",
+    aiGeneratePlaceholder: "напр. диаграмма классов интернет-магазина с User, Order, Product",
+    aiGenerate: "Сгенерировать",
+    aiGenerating: "Генерация…",
+    aiFixError: "Исправить с ИИ",
+    aiFixing: "Исправление…",
+    aiExplain: "Объяснить",
+    aiImprove: "Улучшить / отрефакторить",
+    aiSend: "Отправить",
+    aiThinking: "Думаю…",
+    aiChatPlaceholder: "Попросите добавить класс, изменить компоновку, сменить тип диаграммы…",
+    aiApply: "Применить в редактор",
+    aiInsert: "Вставить",
+    aiCopy: "Копировать",
+    aiClear: "Очистить чат",
+    aiError: "Ошибка запроса к ИИ",
+    aiOpenPanel: "ИИ-ассистент",
   },
 };
 

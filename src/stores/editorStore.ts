@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { safeJSONStorage } from "../lib/safeStorage";
 
 const DEFAULT_CONTENT = `@startuml
 ' Пример Class Diagram
@@ -78,7 +79,7 @@ interface EditorState {
   setIsRendering: (isRendering: boolean) => void;
   setError: (error: string | null) => void;
   toggleSidebar: () => void;
-  createNewFile: (name?: string) => void;
+  createNewFile: (name?: string, content?: string) => void;
   openFile: (id: string) => void;
   closeFile: (id: string) => void;
   renameFile: (id: string, name: string) => void;
@@ -105,7 +106,7 @@ export const useEditorStore = create<EditorState>()(
         if (files.length > 0) {
           // Make sure activeFileId is set
           const { activeFileId } = get();
-          if (!activeFileId || !files.find(f => f.id === activeFileId)) {
+          if (!activeFileId || !files.find((f) => f.id === activeFileId)) {
             set({ activeFileId: files[0].id });
           }
           return;
@@ -121,90 +122,104 @@ export const useEditorStore = create<EditorState>()(
         set({ files: [initialFile], activeFileId: initialFile.id });
       },
 
-  setContent: (content: string) => {
-    const { activeFileId, files } = get();
-    if (!activeFileId) return;
+      setContent: (content: string) => {
+        const { activeFileId, files } = get();
+        if (!activeFileId) return;
 
-    set({
-      files: files.map((f) =>
-        f.id === activeFileId ? { ...f, content, isModified: true } : f
-      ),
-    });
-  },
+        set({
+          files: files.map((f) =>
+            f.id === activeFileId ? { ...f, content, isModified: true } : f,
+          ),
+        });
+      },
 
-  getActiveFile: () => {
-    const { files, activeFileId } = get();
-    return files.find((f) => f.id === activeFileId);
-  },
+      getActiveFile: () => {
+        const { files, activeFileId } = get();
+        return files.find((f) => f.id === activeFileId);
+      },
 
-  setPreviewSvg: (svg: string) => set({ previewSvg: svg }),
-  setIsRendering: (isRendering: boolean) => set({ isRendering }),
-  setError: (error: string | null) => set({ error }),
-  toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
+      setPreviewSvg: (svg: string) => set({ previewSvg: svg }),
+      setIsRendering: (isRendering: boolean) => set({ isRendering }),
+      setError: (error: string | null) => set({ error }),
+      toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
 
-  createNewFile: (name?: string) => {
-    const newFile: DiagramFile = {
-      id: crypto.randomUUID(),
-      name: name || `diagram-${Date.now()}.puml`,
-      content: "@startuml\n\n@enduml",
-      isModified: false,
-    };
-    set((state) => ({
-      files: [...state.files, newFile],
-      activeFileId: newFile.id,
-    }));
-  },
+      createNewFile: (name?: string, content?: string) => {
+        const newFile: DiagramFile = {
+          id: crypto.randomUUID(),
+          name: name || `diagram-${Date.now()}.puml`,
+          content: content ?? "@startuml\n\n@enduml",
+          isModified: false,
+        };
+        set((state) => ({
+          files: [...state.files, newFile],
+          activeFileId: newFile.id,
+        }));
+      },
 
-  openFile: (id: string) => set({ activeFileId: id }),
+      openFile: (id: string) => set({ activeFileId: id }),
 
-  closeFile: (id: string) => {
-    const { files, activeFileId } = get();
-    const newFiles = files.filter((f) => f.id !== id);
-    let newActiveId = activeFileId;
+      closeFile: (id: string) => {
+        const { files, activeFileId } = get();
+        const newFiles = files.filter((f) => f.id !== id);
+        let newActiveId = activeFileId;
 
-    if (activeFileId === id) {
-      const idx = files.findIndex((f) => f.id === id);
-      newActiveId = newFiles[idx]?.id || newFiles[idx - 1]?.id || null;
-    }
+        if (activeFileId === id) {
+          // Pick the neighbour in the ORIGINAL array (next, else previous),
+          // then keep it only if it survived. Indexing newFiles with the old
+          // index was off-by-one after the element was removed.
+          const idx = files.findIndex((f) => f.id === id);
+          const neighbour = files[idx + 1] ?? files[idx - 1];
+          newActiveId = neighbour ? neighbour.id : null;
+        }
 
-    set({ files: newFiles, activeFileId: newActiveId });
-  },
+        set({ files: newFiles, activeFileId: newActiveId });
+      },
 
-  renameFile: (id: string, name: string) => {
-    set((state) => ({
-      files: state.files.map((f) => (f.id === id ? { ...f, name } : f)),
-    }));
-  },
+      renameFile: (id: string, name: string) => {
+        set((state) => ({
+          files: state.files.map((f) => (f.id === id ? { ...f, name } : f)),
+        }));
+      },
 
-  setEditorInstance: (editor: any) => set({ editorInstance: editor }),
+      setEditorInstance: (editor: any) => set({ editorInstance: editor }),
 
-  undo: () => {
-    const { editorInstance } = get();
-    if (editorInstance) {
-      editorInstance.trigger("keyboard", "undo", null);
-    }
-  },
+      undo: () => {
+        const { editorInstance } = get();
+        if (editorInstance) {
+          editorInstance.trigger("keyboard", "undo", null);
+        }
+      },
 
-  redo: () => {
-    const { editorInstance } = get();
-    if (editorInstance) {
-      editorInstance.trigger("keyboard", "redo", null);
-    }
-  },
+      redo: () => {
+        const { editorInstance } = get();
+        if (editorInstance) {
+          editorInstance.trigger("keyboard", "redo", null);
+        }
+      },
 
-  markFileSaved: (id: string) => {
-    set((state) => ({
-      files: state.files.map((f) => (f.id === id ? { ...f, isModified: false } : f)),
-    }));
-  },
-}),
+      markFileSaved: (id: string) => {
+        set((state) => ({
+          files: state.files.map((f) => (f.id === id ? { ...f, isModified: false } : f)),
+        }));
+      },
+    }),
     {
       name: "plantuml-editor-storage",
+      // Use a crash-proof storage adapter: quota-exceeded writes and corrupted
+      // reads degrade gracefully instead of throwing during hydration (issue #1).
+      storage: createJSONStorage(() => safeJSONStorage),
       partialize: (state) => ({
         files: state.files,
         activeFileId: state.activeFileId,
         sidebarVisible: state.sidebarVisible,
       }),
-    }
-  )
+      // If persisted state is malformed, drop it and start clean rather than
+      // letting a bad shape crash the app on load.
+      merge: (persisted, current) => {
+        const incoming = (persisted as Partial<EditorState>) ?? {};
+        const files = Array.isArray(incoming.files) ? incoming.files : [];
+        return { ...current, ...incoming, files };
+      },
+    },
+  ),
 );

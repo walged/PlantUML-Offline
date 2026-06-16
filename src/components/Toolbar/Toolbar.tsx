@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useEditorStore } from "../../stores/editorStore";
-import { useSettingsStore, useTranslation, type Language, type Theme } from "../../stores/settingsStore";
+import {
+  useSettingsStore,
+  useTranslation,
+  type Language,
+  type Theme,
+} from "../../stores/settingsStore";
 import { useServerStore, EMBEDDED_SERVER_URL } from "../../stores/serverStore";
+import { useUiStore } from "../../stores/uiStore";
+import { Modal } from "../Modal/Modal";
+import { AiSettings } from "./AiSettings";
+import { APP_VERSION } from "../../lib/updater";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, writeFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
@@ -14,9 +23,12 @@ import {
 import "./Toolbar.css";
 
 export function Toolbar() {
-  const { createNewFile, toggleSidebar, getActiveFile, undo, redo, markFileSaved, activeFileId } = useEditorStore();
+  const { createNewFile, toggleSidebar, getActiveFile, undo, redo, markFileSaved, activeFileId } =
+    useEditorStore();
   const t = useTranslation();
-  const [showSettings, setShowSettings] = useState(false);
+  const showSettings = useUiStore((s) => s.settingsOpen);
+  const setShowSettings = useUiStore((s) => s.setSettingsOpen);
+  const toggleAiPanel = useUiStore((s) => s.toggleAiPanel);
   const [showAbout, setShowAbout] = useState(false);
   const activeFile = getActiveFile();
 
@@ -116,54 +128,63 @@ export function Toolbar() {
     }
   }, []);
 
-  // Auto-save effect
-  const { autoSave } = useSettingsStore();
-  useEffect(() => {
-    if (!autoSave) return;
-
-    // Store content in localStorage for recovery
-    const files = useEditorStore.getState().files;
-    localStorage.setItem("plantuml-editor-autosave", JSON.stringify(files));
-  }, [activeFile?.content, autoSave]);
+  // Note: a previous redundant autosave effect that wrote a duplicate
+  // "plantuml-editor-autosave" copy on every keystroke was removed. The zustand
+  // `persist` middleware already saves files crash-proof on change (issue #1).
 
   return (
     <>
       <div className="toolbar">
         <div className="toolbar-left">
-          <button className="toolbar-btn" onClick={toggleSidebar} title={t.toggleSidebar}>
+          <button
+            className="toolbar-btn"
+            onClick={toggleSidebar}
+            title={t.toggleSidebar}
+            aria-label={t.toggleSidebar}
+          >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M2 2h12v12H2V2zm1 1v10h3V3H3zm4 0v10h6V3H7z"/>
+              <path d="M2 2h12v12H2V2zm1 1v10h3V3H3zm4 0v10h6V3H7z" />
             </svg>
           </button>
           <div className="toolbar-divider" />
           <button className="toolbar-btn" onClick={() => createNewFile()} title={t.newFile}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M9.5 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5L9.5 1zM4 2h5v3h3v9H4V2z"/>
+              <path d="M9.5 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5L9.5 1zM4 2h5v3h3v9H4V2z" />
             </svg>
             <span>{t.newFile}</span>
           </button>
           <button className="toolbar-btn" onClick={handleOpenFile} title={t.openFile}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5H9.62a2.5 2.5 0 0 1-1.768-.732L6.732 3.268A.5.5 0 0 0 6.379 3H2.5z"/>
+              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5H9.62a2.5 2.5 0 0 1-1.768-.732L6.732 3.268A.5.5 0 0 0 6.379 3H2.5z" />
             </svg>
             <span>{t.openFile}</span>
           </button>
           <button className="toolbar-btn" onClick={handleSave} title={t.save}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M13 1H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zM3 2h10a1 1 0 0 1 1 1v8H2V3a1 1 0 0 1 1-1zm0 12a1 1 0 0 1-1-1v-1h12v1a1 1 0 0 1-1 1H3z"/>
-              <path d="M5 5h6v3H5V5z"/>
+              <path d="M13 1H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zM3 2h10a1 1 0 0 1 1 1v8H2V3a1 1 0 0 1 1-1zm0 12a1 1 0 0 1-1-1v-1h12v1a1 1 0 0 1-1 1H3z" />
+              <path d="M5 5h6v3H5V5z" />
             </svg>
             <span>{t.save}</span>
           </button>
           <div className="toolbar-divider" />
-          <button className="toolbar-btn icon-only" onClick={undo} title={t.undo}>
+          <button
+            className="toolbar-btn icon-only"
+            onClick={undo}
+            title={t.undo}
+            aria-label={t.undo}
+          >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M4.5 6.5L1 10l3.5 3.5V11H8c2.76 0 5-2.24 5-5s-2.24-5-5-5H3v2h5c1.66 0 3 1.34 3 3s-1.34 3-3 3H4.5V6.5z"/>
+              <path d="M4.5 6.5L1 10l3.5 3.5V11H8c2.76 0 5-2.24 5-5s-2.24-5-5-5H3v2h5c1.66 0 3 1.34 3 3s-1.34 3-3 3H4.5V6.5z" />
             </svg>
           </button>
-          <button className="toolbar-btn icon-only" onClick={redo} title={t.redo}>
+          <button
+            className="toolbar-btn icon-only"
+            onClick={redo}
+            title={t.redo}
+            aria-label={t.redo}
+          >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M11.5 6.5L15 10l-3.5 3.5V11H8c-2.76 0-5-2.24-5-5s2.24-5 5-5h5v2H8C6.34 3 5 4.34 5 6s1.34 3 3 3h3.5V6.5z"/>
+              <path d="M11.5 6.5L15 10l-3.5 3.5V11H8c-2.76 0-5-2.24-5-5s2.24-5 5-5h5v2H8C6.34 3 5 4.34 5 6s1.34 3 3 3h3.5V6.5z" />
             </svg>
           </button>
         </div>
@@ -176,30 +197,44 @@ export function Toolbar() {
         <div className="toolbar-right">
           <button className="toolbar-btn" onClick={handleExportSvg} title={t.exportSvg}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
-              <path d="M14 14H2v-3h1v2h10v-2h1v3z"/>
+              <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z" />
+              <path d="M14 14H2v-3h1v2h10v-2h1v3z" />
             </svg>
             <span>{t.exportSvg}</span>
           </button>
           <button className="toolbar-btn" onClick={handleExportPng} title={t.exportPng}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
-              <path d="M14 14H2v-3h1v2h10v-2h1v3z"/>
+              <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z" />
+              <path d="M14 14H2v-3h1v2h10v-2h1v3z" />
             </svg>
             <span>{t.exportPng}</span>
           </button>
           <div className="toolbar-divider" />
-          <button className="toolbar-btn" onClick={() => setShowSettings(true)} title={t.settings}>
+          <button
+            className="toolbar-btn"
+            onClick={toggleAiPanel}
+            title={t.aiAssistant}
+            aria-label={t.aiAssistant}
+          >
+            <span aria-hidden="true">✨</span>
+            <span>{t.aiAssistant}</span>
+          </button>
+          <button
+            className="toolbar-btn"
+            onClick={() => setShowSettings(true)}
+            title={t.settings}
+            aria-label={t.settings}
+          >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-              <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z"/>
+              <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z" />
+              <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z" />
             </svg>
             <span>{t.settings}</span>
           </button>
           <button className="toolbar-btn" onClick={() => setShowAbout(true)} title={t.about}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-              <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+              <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
+              <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z" />
             </svg>
             <span>{t.about}</span>
           </button>
@@ -208,32 +243,20 @@ export function Toolbar() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="modal-overlay" onClick={() => setShowSettings(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{t.settingsTitle}</h2>
-              <button className="modal-close" onClick={() => setShowSettings(false)}>×</button>
-            </div>
-            <div className="modal-content">
-              <SettingsPanel />
-            </div>
-          </div>
-        </div>
+        <Modal
+          title={t.settingsTitle}
+          onClose={() => setShowSettings(false)}
+          closeLabel={t.dismiss}
+        >
+          <SettingsPanel />
+        </Modal>
       )}
 
       {/* About Modal */}
       {showAbout && (
-        <div className="modal-overlay" onClick={() => setShowAbout(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{t.aboutTitle}</h2>
-              <button className="modal-close" onClick={() => setShowAbout(false)}>×</button>
-            </div>
-            <div className="modal-content">
-              <AboutPanel />
-            </div>
-          </div>
-        </div>
+        <Modal title={t.aboutTitle} onClose={() => setShowAbout(false)} closeLabel={t.dismiss}>
+          <AboutPanel />
+        </Modal>
       )}
     </>
   );
@@ -242,18 +265,32 @@ export function Toolbar() {
 function SettingsPanel() {
   const t = useTranslation();
   const {
-    language, setLanguage,
-    theme, setTheme,
-    fontSize, setFontSize,
-    renderDelay, setRenderDelay,
-    autoSave, setAutoSave,
-    checkForUpdates, setCheckForUpdates,
-    imageSavePath, setImageSavePath,
-    plantUmlServer, setPlantUmlServer,
-    useEmbeddedServer, setUseEmbeddedServer
+    language,
+    setLanguage,
+    theme,
+    setTheme,
+    fontSize,
+    setFontSize,
+    renderDelay,
+    setRenderDelay,
+    autoSave,
+    setAutoSave,
+    checkForUpdates,
+    setCheckForUpdates,
+    imageSavePath,
+    setImageSavePath,
+    plantUmlServer,
+    setPlantUmlServer,
+    useEmbeddedServer,
+    setUseEmbeddedServer,
   } = useSettingsStore();
 
-  const { embeddedServerRunning, embeddedServerError, setEmbeddedServerStatus, checkServerStatusWithRetry } = useServerStore();
+  const {
+    embeddedServerRunning,
+    embeddedServerError,
+    setEmbeddedServerStatus,
+    checkServerStatusWithRetry,
+  } = useServerStore();
   const [serverLoading, setServerLoading] = useState(false);
 
   // Check embedded server status on mount
@@ -415,12 +452,7 @@ function SettingsPanel() {
       <div className="setting-group">
         <label>{t.imageSavePath}</label>
         <div className="setting-path">
-          <input
-            type="text"
-            value={imageSavePath || ""}
-            placeholder={t.notSet}
-            readOnly
-          />
+          <input type="text" value={imageSavePath || ""} placeholder={t.notSet} readOnly />
           <button className="setting-path-btn" onClick={handleChoosePath}>
             {t.choosePath}
           </button>
@@ -443,16 +475,16 @@ function SettingsPanel() {
       {useEmbeddedServer && (
         <div className="setting-group embedded-server-controls">
           <div className="server-status-row">
-            <span className={`server-status-badge ${embeddedServerRunning ? 'running' : 'stopped'}`}>
+            <span
+              className={`server-status-badge ${embeddedServerRunning ? "running" : "stopped"}`}
+            >
               {embeddedServerRunning ? t.embeddedServerRunning : t.embeddedServerStopped}
             </span>
             {embeddedServerRunning && (
               <span className="server-port">{t.embeddedServerPort}: 18123</span>
             )}
           </div>
-          {embeddedServerError && (
-            <div className="server-error">{embeddedServerError}</div>
-          )}
+          {embeddedServerError && <div className="server-error">{embeddedServerError}</div>}
           <div className="server-buttons">
             {!embeddedServerRunning ? (
               <button
@@ -496,6 +528,8 @@ function SettingsPanel() {
           <span className="setting-hint">{t.customServerHint}</span>
         </div>
       )}
+
+      <AiSettings />
     </div>
   );
 }
@@ -507,13 +541,25 @@ function AboutPanel() {
     <div className="about-panel">
       <div className="about-logo">
         <svg width="64" height="64" viewBox="0 0 100 100">
-          <rect width="100" height="100" rx="15" fill="#2d2d30"/>
-          <text x="50" y="65" fontFamily="Arial" fontSize="32" fontWeight="bold" fill="#4ec9b0" textAnchor="middle">UML</text>
+          <rect width="100" height="100" rx="15" fill="#2d2d30" />
+          <text
+            x="50"
+            y="65"
+            fontFamily="Arial"
+            fontSize="32"
+            fontWeight="bold"
+            fill="#4ec9b0"
+            textAnchor="middle"
+          >
+            UML
+          </text>
         </svg>
       </div>
 
       <h3>PlantUML Editor</h3>
-      <p className="version">{t.version} 0.1.4</p>
+      <p className="version">
+        {t.version} {APP_VERSION}
+      </p>
 
       <p className="description">{t.description}</p>
 
@@ -531,36 +577,72 @@ function AboutPanel() {
       <div className="about-links">
         <p>
           <strong>{t.developer}:</strong>{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://t.me/walged"); }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://t.me/walged");
+            }}
+          >
             WALGED
           </a>
         </p>
         <p>
           <strong>{t.website}:</strong>{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://arthurdev.ru"); }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://arthurdev.ru");
+            }}
+          >
             arthurdev.ru
           </a>
         </p>
         <p>
           <strong>{t.github}:</strong>{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://github.com/walged/PlantUML-Offline"); }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://github.com/walged/PlantUML-Offline");
+            }}
+          >
             github.com/walged/PlantUML-Offline
           </a>
         </p>
         <div className="about-divider" />
         <p>
           {t.poweredBy}{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://plantuml.com"); }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://plantuml.com");
+            }}
+          >
             PlantUML
           </a>
         </p>
         <p>
           {t.builtWith}{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://tauri.app"); }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://tauri.app");
+            }}
+          >
             Tauri
           </a>{" "}
           +{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); openUrl("https://react.dev"); }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://react.dev");
+            }}
+          >
             React
           </a>
         </p>
@@ -604,12 +686,10 @@ function ServerStatusIndicator() {
       className="server-status-indicator"
       onClick={() => status === "offline" && setShowWarning(true)}
       title={getStatusText()}
+      aria-label={getStatusText()}
     >
-      <span
-        className="status-dot"
-        style={{ backgroundColor: getStatusColor() }}
-      />
-      {status === "offline" && <span className="status-text">Offline</span>}
+      <span className="status-dot" style={{ backgroundColor: getStatusColor() }} />
+      {status === "offline" && <span className="status-text">{t.serverOffline}</span>}
     </button>
   );
 }

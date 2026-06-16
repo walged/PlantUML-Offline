@@ -44,9 +44,7 @@ export function UpdateNotification({ updateInfo, onClose }: UpdateNotificationPr
                 <strong>{updateInfo.latestVersion}</strong>
               </span>
             </div>
-            {updateInfo.releaseName && (
-              <p className="release-name">{updateInfo.releaseName}</p>
-            )}
+            {updateInfo.releaseName && <p className="release-name">{updateInfo.releaseName}</p>}
             <div className="update-buttons">
               <button className="update-btn primary" onClick={handleDownload}>
                 {t.download}

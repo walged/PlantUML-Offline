@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
+use crate::ai::{self, AiRequest, AiResponse};
 use crate::plantuml_server::{self, ServerStatus};
 
 #[tauri::command]
@@ -41,4 +42,16 @@ pub async fn get_plantuml_server_status() -> ServerStatus {
 #[tauri::command]
 pub async fn restart_plantuml_server(app: AppHandle) -> Result<ServerStatus, String> {
     plantuml_server::restart_server(&app)
+}
+
+#[tauri::command]
+pub async fn get_plantuml_server_log(app: AppHandle) -> Result<String, String> {
+    plantuml_server::read_server_log(&app)
+}
+
+// AI Commands
+
+#[tauri::command]
+pub async fn ai_chat(request: AiRequest) -> Result<AiResponse, String> {
+    ai::chat_completion(request).await
 }

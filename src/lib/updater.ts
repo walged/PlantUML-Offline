@@ -23,7 +23,7 @@ export interface UpdateInfo {
 }
 
 // Current app version - should match Cargo.toml and package.json
-export const APP_VERSION = "0.1.4";
+export const APP_VERSION = "0.2.0";
 
 const GITHUB_REPO = "walged/PlantUML-Offline";
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -59,7 +59,7 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
   try {
     const response = await fetch(GITHUB_API_URL, {
       headers: {
-        "Accept": "application/vnd.github.v3+json",
+        Accept: "application/vnd.github.v3+json",
         // User-Agent required by GitHub API
         "User-Agent": "PlantUML-Offline-App",
       },
@@ -74,7 +74,7 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
 
     // Find Windows installer in assets
     const windowsAsset = release.assets.find(
-      (asset) => asset.name.endsWith(".exe") || asset.name.endsWith(".msi")
+      (asset) => asset.name.endsWith(".exe") || asset.name.endsWith(".msi"),
     );
 
     const isNewer = compareVersions(latestVersion, APP_VERSION) > 0;

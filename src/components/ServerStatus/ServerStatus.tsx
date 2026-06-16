@@ -19,7 +19,10 @@ export function ServerStatus() {
           <h3>{t.serverOfflineTitle || "Server Unavailable"}</h3>
         </div>
         <div className="server-status-content">
-          <p>{t.serverOfflineMessage || "PlantUML server is not reachable. Diagram rendering will not work."}</p>
+          <p>
+            {t.serverOfflineMessage ||
+              "PlantUML server is not reachable. Diagram rendering will not work."}
+          </p>
           <p className="server-url">
             {t.currentServer || "Current server"}: <code>{plantUmlServer}</code>
           </p>
@@ -32,7 +35,9 @@ export function ServerStatus() {
             <pre className="code-block">
               docker run -d -p 8080:8080 plantuml/plantuml-server:jetty
             </pre>
-            <p className="hint">{t.localServerHint || "Then set server URL to:"} <code>http://localhost:8080</code></p>
+            <p className="hint">
+              {t.localServerHint || "Then set server URL to:"} <code>http://localhost:8080</code>
+            </p>
           </div>
         </div>
         <div className="server-status-actions">

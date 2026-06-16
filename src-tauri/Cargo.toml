@@ -1,8 +1,10 @@
 [package]
 name = "plantuml-editor"
-version = "0.1.4"
-description = "PlantUML Desktop Editor"
-authors = ["you"]
+version = "0.2.0"
+description = "PlantUML Offline — desktop UML diagram editor with live preview"
+authors = ["walged"]
+license = "MIT"
+repository = "https://github.com/walged/PlantUML-Offline"
 edition = "2021"
 
 [lib]
@@ -19,6 +21,10 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# AI integration: HTTP client for calling LLM providers from the Rust backend
+# (avoids CORS and keeps API keys out of the webview).
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
 
 [profile.release]
 panic = "abort"

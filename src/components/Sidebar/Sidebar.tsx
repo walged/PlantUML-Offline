@@ -192,7 +192,8 @@ Product ||--o{ OrderItem
 ];
 
 export function Sidebar() {
-  const { sidebarVisible, files, activeFileId, openFile, createNewFile, renameFile } = useEditorStore();
+  const { sidebarVisible, files, activeFileId, openFile, createNewFile, renameFile } =
+    useEditorStore();
   const t = useTranslation();
   const [activeTab, setActiveTab] = useState<"files" | "templates">("files");
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
@@ -211,14 +212,12 @@ export function Sidebar() {
     return null;
   }
 
-  const handleTemplateClick = (template: typeof TEMPLATES[0]) => {
+  const handleTemplateClick = (template: (typeof TEMPLATES)[0]) => {
     const fileName = `${template.name.toLowerCase().replace(/\s+/g, "-")}.puml`;
-
-    // Всегда создаём новый файл с шаблоном
-    createNewFile(fileName);
-    setTimeout(() => {
-      useEditorStore.getState().setContent(template.code);
-    }, 0);
+    // Create the file with its content in one atomic action. The previous
+    // setTimeout(setContent, 0) raced when templates were clicked quickly and
+    // marked every template file as modified (UI audit #5).
+    createNewFile(fileName, template.code);
   };
 
   const handleStartRename = (fileId: string, currentName: string) => {

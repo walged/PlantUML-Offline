@@ -24,7 +24,7 @@ interface ServerState {
 }
 
 // Helper function to wait
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const useServerStore = create<ServerState>((set, get) => ({
   status: "unknown",
@@ -39,9 +39,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
     try {
       // Get settings directly from store
       const settings = useSettingsStore.getState();
-      const serverUrl = settings.useEmbeddedServer
-        ? EMBEDDED_SERVER_URL
-        : settings.plantUmlServer;
+      const serverUrl = settings.useEmbeddedServer ? EMBEDDED_SERVER_URL : settings.plantUmlServer;
 
       console.log("Checking server:", serverUrl);
 

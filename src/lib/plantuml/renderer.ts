@@ -1,46 +1,65 @@
 import plantumlEncoder from "plantuml-encoder";
+import { safeGetItem } from "../safeStorage";
 
 const DEFAULT_SERVER = "https://www.plantuml.com/plantuml";
-const CACHE_KEY = "plantuml-render-cache";
 const MAX_CACHE_SIZE = 50;
 
+/**
+ * Error kind for render failures, so the UI can decide what to show (e.g. the
+ * "Restart server" button only for network/server problems) without fragile
+ * substring matching on localized messages. See issue #2 / UI audit.
+ */
+export type RenderErrorKind = "network" | "server" | "unknown";
+
+export class RenderError extends Error {
+  kind: RenderErrorKind;
+  status?: number;
+
+  constructor(message: string, kind: RenderErrorKind, status?: number) {
+    super(message);
+    this.name = "RenderError";
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
 interface CacheEntry {
-  code: string;
   svg: string;
-  timestamp: number;
 }
 
-// Load cache from localStorage
-function loadCache(): Map<string, CacheEntry> {
-  try {
-    const data = localStorage.getItem(CACHE_KEY);
-    if (data) {
-      const entries = JSON.parse(data) as CacheEntry[];
-      return new Map(entries.map((e) => [e.code, e]));
+/**
+ * In-memory LRU render cache. Previously this was persisted to localStorage,
+ * which competed with saved diagrams for the ~5 MB quota and contributed to the
+ * quota-overflow black screen (issue #1). SVGs are cheap to re-fetch from the
+ * local server, so keeping the cache in memory only is the right trade-off.
+ */
+const renderCache = new Map<string, CacheEntry>();
+
+function cacheGet(code: string): string | undefined {
+  const entry = renderCache.get(code);
+  if (entry) {
+    // Refresh LRU order.
+    renderCache.delete(code);
+    renderCache.set(code, entry);
+    return entry.svg;
+  }
+  return undefined;
+}
+
+function cacheSet(code: string, svg: string) {
+  renderCache.set(code, { svg });
+  if (renderCache.size > MAX_CACHE_SIZE) {
+    // Evict the oldest entry (first key in insertion order).
+    const oldest = renderCache.keys().next().value;
+    if (oldest !== undefined) {
+      renderCache.delete(oldest);
     }
-  } catch {
-    // Ignore cache errors
-  }
-  return new Map();
-}
-
-// Save cache to localStorage
-function saveCache(cache: Map<string, CacheEntry>) {
-  try {
-    const entries = Array.from(cache.values())
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, MAX_CACHE_SIZE);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(entries));
-  } catch {
-    // Ignore cache errors
   }
 }
-
-const renderCache = loadCache();
 
 export function getServerUrl(): string {
   try {
-    const settings = localStorage.getItem("plantuml-editor-settings");
+    const settings = safeGetItem("plantuml-editor-settings");
     if (settings) {
       const parsed = JSON.parse(settings);
       if (parsed.state?.plantUmlServer) {
@@ -67,63 +86,96 @@ export async function checkServerConnection(serverUrl: string): Promise<boolean>
   }
 }
 
-export async function renderPlantUML(code: string): Promise<string> {
+/**
+ * Renders PlantUML code to SVG.
+ *
+ * @param code   the diagram source
+ * @param signal optional AbortSignal so callers can cancel a stale in-flight
+ *               render when the user keeps typing.
+ */
+export async function renderPlantUML(code: string, signal?: AbortSignal): Promise<string> {
   if (!code.trim()) {
     return "";
   }
 
-  // Check cache first
-  const cached = renderCache.get(code);
+  const cached = cacheGet(code);
   if (cached) {
-    return cached.svg;
+    return cached;
   }
 
+  const encoded = plantumlEncoder.encode(code);
+  const server = getServerUrl();
+  const url = `${server}/svg/${encoded}`;
+
+  // Combine the caller's signal with our own timeout.
+  const timeout = AbortSignal.timeout(15000);
+  const combined = signal ? anySignal([signal, timeout]) : timeout;
+
+  let response: Response;
   try {
-    const encoded = plantumlEncoder.encode(code);
-    const server = getServerUrl();
-    const url = `${server}/svg/${encoded}`;
-
-    const response = await fetch(url, {
-      // Short timeout for faster offline detection
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      // PlantUML returns error diagrams with 400 status, check if it's an SVG
-      if (response.status === 400 && errorText.includes("<svg")) {
-        // It's an error diagram, show it to the user
-        return errorText;
-      }
-      throw new Error(`PlantUML server error: ${response.status}`);
-    }
-
-    const svg = await response.text();
-
-    // Cache the result
-    renderCache.set(code, {
-      code,
-      svg,
-      timestamp: Date.now(),
-    });
-    saveCache(renderCache);
-
-    return svg;
+    response = await fetch(url, { signal: combined });
   } catch (error) {
-    // If offline, try to find a similar cached result
-    if (error instanceof Error && (error.name === "TimeoutError" || error.message.includes("fetch"))) {
-      // Return cached version if available (even if code slightly different)
-      const cached = renderCache.get(code);
-      if (cached) {
-        return cached.svg;
-      }
-
-      throw new Error("No internet connection and no cached version available");
+    // Caller-initiated cancellation: re-throw as-is so callers can ignore it.
+    if (signal?.aborted) {
+      throw error;
     }
-
-    console.error("PlantUML rendering error:", error);
-    throw error;
+    // Otherwise this is a network/timeout failure. Fall back to cache if any.
+    const fallback = cacheGet(code);
+    if (fallback) {
+      return fallback;
+    }
+    throw new RenderError(
+      "No connection to the PlantUML server and no cached version available",
+      "network",
+    );
   }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    // PlantUML returns error *diagrams* with a 400 status as SVG — show them.
+    if (response.status === 400 && errorText.includes("<svg")) {
+      return errorText;
+    }
+    // Any other non-OK status is a server-side problem (issue #2: ELK failures
+    // surface here). Include the body so the UI can show the real cause instead
+    // of a meaningless masked code.
+    const detail = extractServerError(errorText) || `HTTP ${response.status}`;
+    throw new RenderError(`PlantUML server error: ${detail}`, "server", response.status);
+  }
+
+  const svg = await response.text();
+  cacheSet(code, svg);
+  return svg;
+}
+
+/** Pull a human-readable message out of a PlantUML server error response. */
+function extractServerError(body: string): string | null {
+  if (!body) return null;
+  // PlantUML error pages and picoweb stack traces are plain text/HTML.
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  // Keep it short for display.
+  const firstLine = trimmed
+    .split("\n")[0]
+    .replace(/<[^>]+>/g, "")
+    .trim();
+  return firstLine ? firstLine.slice(0, 200) : null;
+}
+
+/** Polyfill for AbortSignal.any (not in all webviews yet). */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof (AbortSignal as any).any === "function") {
+    return (AbortSignal as any).any(signals);
+  }
+  const controller = new AbortController();
+  for (const s of signals) {
+    if (s.aborted) {
+      controller.abort(s.reason);
+      break;
+    }
+    s.addEventListener("abort", () => controller.abort(s.reason), { once: true });
+  }
+  return controller.signal;
 }
 
 export function getPlantUMLImageUrl(code: string, format: "svg" | "png" = "svg"): string {
@@ -135,7 +187,6 @@ export function getPlantUMLImageUrl(code: string, format: "svg" | "png" = "svg")
 // Clear render cache
 export function clearRenderCache() {
   renderCache.clear();
-  localStorage.removeItem(CACHE_KEY);
 }
 
 // Get cache size

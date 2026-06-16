@@ -1,13 +1,16 @@
 {
   "name": "plantuml-editor",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -15,6 +18,7 @@
     "@tauri-apps/plugin-fs": "^2.4.4",
     "@tauri-apps/plugin-shell": "^2.3.3",
     "@types/node": "^24.10.1",
+    "monaco-editor": "^0.55.1",
     "plantuml-encoder": "^1.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -27,6 +31,7 @@
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
+    "prettier": "^3.8.4",
     "typescript": "^5.3.3",
     "vite": "^5.0.10"
   }

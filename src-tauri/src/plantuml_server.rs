@@ -1,3 +1,4 @@
+use std::fs;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -48,22 +49,43 @@ fn kill_process_on_port(port: u16) {
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
 
-        // Parse PIDs from netstat output and collect unique ones
+        // Parse PIDs from netstat output and collect unique ones.
         let mut killed_pids = std::collections::HashSet::new();
 
+        // Only kill a process that is LISTENING on *our local* address+port.
+        // Matching on `findstr :PORT` alone is unsafe: it also matches remote
+        // addresses ending in :PORT and unrelated lines, so we'd risk killing
+        // the wrong process. netstat layout:
+        //   TCP  127.0.0.1:18123  0.0.0.0:0  LISTENING  12345
+        //   [0]  [1 local]        [2 remote] [3 state]  [4 pid]
+        let local_v4 = format!("127.0.0.1:{}", port);
+        let local_any = format!("0.0.0.0:{}", port);
+
         for line in stdout.lines() {
-            // netstat output: TCP 127.0.0.1:18123 ... LISTENING 12345
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if let Some(pid_str) = parts.last() {
-                if let Ok(pid) = pid_str.parse::<u32>() {
-                    if pid > 0 && !killed_pids.contains(&pid) {
-                        println!("Killing process {} on port {}", pid, port);
-                        let _ = Command::new("taskkill")
-                            .args(["/F", "/T", "/PID", &pid.to_string()])
-                            .creation_flags(0x08000000)
-                            .output();
-                        killed_pids.insert(pid);
-                    }
+            if parts.len() < 5 {
+                continue;
+            }
+            let proto = parts[0];
+            let local = parts[1];
+            let state = parts[3];
+            let pid_str = parts[4];
+
+            let is_tcp = proto.eq_ignore_ascii_case("TCP");
+            let is_listening = state.eq_ignore_ascii_case("LISTENING");
+            let is_our_local = local == local_v4 || local == local_any;
+
+            if !(is_tcp && is_listening && is_our_local) {
+                continue;
+            }
+
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if pid > 0 && killed_pids.insert(pid) {
+                    println!("Killing process {} listening on {}", pid, local);
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/T", "/PID", &pid.to_string()])
+                        .creation_flags(0x08000000)
+                        .output();
                 }
             }
         }
@@ -111,8 +133,17 @@ fn get_plantuml_jar_path(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-/// Get the Java executable path
-fn get_java_path(app: &AppHandle) -> String {
+/// Result of resolving the Java executable.
+struct JavaResolution {
+    path: String,
+    /// True when we fell back to the system `java` on PATH instead of the
+    /// bundled JRE. The bundled JRE is required for reliable ELK layout
+    /// (issue #2); system Java may be too old and cause renders to fail.
+    is_system_fallback: bool,
+}
+
+/// Get the Java executable path, preferring the bundled JRE.
+fn resolve_java(app: &AppHandle) -> JavaResolution {
     // First, check for bundled JRE
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled_java = if cfg!(windows) {
@@ -122,12 +153,27 @@ fn get_java_path(app: &AppHandle) -> String {
         };
 
         if bundled_java.exists() {
-            return bundled_java.to_string_lossy().to_string();
+            return JavaResolution {
+                path: bundled_java.to_string_lossy().to_string(),
+                is_system_fallback: false,
+            };
         }
     }
 
-    // Fallback to system Java
-    "java".to_string()
+    // Fallback to system Java (may be too old for ELK).
+    JavaResolution {
+        path: "java".to_string(),
+        is_system_fallback: true,
+    }
+}
+
+/// Path to the server log file, where JVM stdout/stderr is captured so render
+/// failures (e.g. ELK class-version errors) can be diagnosed instead of being
+/// masked behind a generic HTTP error (issue #2).
+fn server_log_path(app: &AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_log_dir().ok()?;
+    let _ = fs::create_dir_all(&dir);
+    Some(dir.join("plantuml-server.log"))
 }
 
 /// Start the embedded PlantUML server
@@ -164,23 +210,48 @@ pub fn start_server(app: &AppHandle) -> Result<ServerStatus, String> {
     // Find available port
     let port = find_available_port(DEFAULT_PORT);
 
-    // Get Java path
-    let java_path = get_java_path(app);
+    // Get Java path (prefer bundled JRE)
+    let java = resolve_java(app);
+    let java_path = java.path.clone();
 
     println!("Starting PlantUML server on port {} using Java: {}", port, java_path);
+    if java.is_system_fallback {
+        println!(
+            "WARNING: bundled JRE not found, using system 'java'. If diagram rendering \
+             (especially '!pragma layout elk') fails, install a modern JDK (17+)."
+        );
+    }
     println!("JAR path: {}", jar_path_normalized);
+
+    // Capture JVM stdout/stderr to a log file instead of discarding it. The Java
+    // process writes startup banners and, crucially, stack traces for failed
+    // renders (e.g. ELK class-version errors) to stderr; capturing them lets us
+    // surface the real cause instead of a generic HTTP error (issue #2).
+    // A file (not a pipe) is used so the OS — not our process — drains the
+    // output, avoiding the buffer-fill deadlock the old Stdio::null() guarded
+    // against.
+    let (stdout_target, stderr_target) = match server_log_path(app) {
+        Some(log) => {
+            let out = fs::OpenOptions::new().create(true).append(true).open(&log);
+            let err = fs::OpenOptions::new().create(true).append(true).open(&log);
+            match (out, err) {
+                (Ok(o), Ok(e)) => (Stdio::from(o), Stdio::from(e)),
+                _ => (Stdio::null(), Stdio::null()),
+            }
+        }
+        None => (Stdio::null(), Stdio::null()),
+    };
 
     // Start the server process
     // PlantUML picoweb mode: java -jar plantuml.jar -picoweb:PORT
-    // Use Stdio::null() to prevent output buffer from filling up and blocking Java
     let mut cmd = Command::new(&java_path);
     cmd.args([
         "-jar",
         jar_path_normalized,
         &format!("-picoweb:{}", port),
     ])
-    .stdout(Stdio::null())
-    .stderr(Stdio::null());
+    .stdout(stdout_target)
+    .stderr(stderr_target);
 
     // On Windows, hide the console window
     #[cfg(windows)]
@@ -284,4 +355,17 @@ pub fn restart_server(app: &AppHandle) -> Result<ServerStatus, String> {
     stop_server()?;
     std::thread::sleep(std::time::Duration::from_millis(500));
     start_server(app)
+}
+
+/// Return the tail of the PlantUML server log so the UI can show real JVM
+/// diagnostics (issue #2). Returns at most the last ~16 KB.
+pub fn read_server_log(app: &AppHandle) -> Result<String, String> {
+    let path = server_log_path(app).ok_or_else(|| "Log path unavailable".to_string())?;
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    const MAX: usize = 16 * 1024;
+    if content.len() > MAX {
+        Ok(content[content.len() - MAX..].to_string())
+    } else {
+        Ok(content)
+    }
 }

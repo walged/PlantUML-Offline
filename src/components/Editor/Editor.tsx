@@ -28,11 +28,12 @@ export function Editor() {
 
   const getOrCreateModel = useCallback((id: string, content: string): TextModel => {
     const monaco = monacoRef.current!;
-    let model = modelsRef.current.get(id);
-    if (!model || model.isDisposed()) {
-      model = monaco.editor.createModel(content, "plantuml");
-      modelsRef.current.set(id, model);
+    const existing = modelsRef.current.get(id);
+    if (existing && !existing.isDisposed()) {
+      return existing;
     }
+    const model = monaco.editor.createModel(content, "plantuml") as TextModel;
+    modelsRef.current.set(id, model);
     return model;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

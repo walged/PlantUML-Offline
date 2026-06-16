@@ -6,9 +6,11 @@ import { Preview } from "./components/Preview/Preview";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ServerStatus } from "./components/ServerStatus/ServerStatus";
 import { UpdateNotification } from "./components/UpdateNotification/UpdateNotification";
+import { AiPanel } from "./components/AiPanel/AiPanel";
 import { useEditorStore } from "./stores/editorStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useServerStore } from "./stores/serverStore";
+import { useUiStore } from "./stores/uiStore";
 import { checkForUpdates, UpdateInfo } from "./lib/updater";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -20,6 +22,9 @@ function App() {
   const theme = useSettingsStore((state) => state.theme);
   const checkForUpdatesEnabled = useSettingsStore((state) => state.checkForUpdates);
   const { checkServerStatus, checkServerStatusWithRetry } = useServerStore();
+  const aiPanelOpen = useUiStore((s) => s.aiPanelOpen);
+  const setAiPanelOpen = useUiStore((s) => s.setAiPanelOpen);
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
   const unlistenRef = useRef<(() => void) | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
@@ -56,9 +61,12 @@ function App() {
       checkServerStatusWithRetry(5, 1500); // 5 retries, 1.5s between each
     }, 5000); // Wait 5s before first check
 
-    const interval = setInterval(() => {
-      checkServerStatus();
-    }, 10 * 60 * 1000); // 10 minutes
+    const interval = setInterval(
+      () => {
+        checkServerStatus();
+      },
+      10 * 60 * 1000,
+    ); // 10 minutes
 
     return () => {
       clearTimeout(initialCheck);
@@ -66,51 +74,40 @@ function App() {
     };
   }, [checkServerStatus, checkServerStatusWithRetry]);
 
-  // Auto-save on window close
+  // The zustand `persist` middleware already saves `files` to localStorage on
+  // every change (via a crash-proof safeStorage adapter), so no extra autosave
+  // loop is needed. The previous code wrote a second, redundant
+  // "plantuml-editor-autosave" copy that was never read back and doubled
+  // localStorage usage — a key cause of the quota-overflow black screen
+  // (issue #1). Both the periodic timer and the on-close duplicate were removed.
+  // We still register an onCloseRequested listener (currently a no-op) so future
+  // shutdown hooks have a place to live, with proper cleanup on unmount.
   useEffect(() => {
-    const saveBeforeClose = () => {
-      const files = useEditorStore.getState().files;
-      localStorage.setItem("plantuml-editor-autosave", JSON.stringify(files));
-    };
-
-    // Save on browser beforeunload
-    window.addEventListener("beforeunload", saveBeforeClose);
-
-    // Save on Tauri window close - with proper cleanup
     let isMounted = true;
     const appWindow = getCurrentWindow();
 
-    appWindow.onCloseRequested(async () => {
-      saveBeforeClose();
-      // Don't prevent close, just save
-    }).then((unlisten) => {
-      if (isMounted) {
-        unlistenRef.current = unlisten;
-      } else {
-        unlisten();
-      }
-    }).catch(() => {
-      // Ignore errors during hot reload
-    });
+    appWindow
+      .onCloseRequested(async () => {
+        // State is already persisted on change; nothing to flush here.
+      })
+      .then((unlisten) => {
+        if (isMounted) {
+          unlistenRef.current = unlisten;
+        } else {
+          unlisten();
+        }
+      })
+      .catch(() => {
+        // Ignore errors during hot reload
+      });
 
     return () => {
       isMounted = false;
-      window.removeEventListener("beforeunload", saveBeforeClose);
       if (unlistenRef.current) {
         unlistenRef.current();
         unlistenRef.current = null;
       }
     };
-  }, []);
-
-  // Auto-save periodically every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const files = useEditorStore.getState().files;
-      localStorage.setItem("plantuml-editor-autosave", JSON.stringify(files));
-    }, 10000);
-
-    return () => clearInterval(interval);
   }, []);
 
   // Apply theme to document
@@ -163,34 +160,44 @@ function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      const key = e.key.toLowerCase();
+
+      // Don't hijack shortcuts while typing in a non-Monaco text field
+      // (e.g. the rename input or a settings field). Monaco has its own.
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA") &&
+        !target.closest(".monaco-editor");
+
       // Ctrl+S - Save
-      if (e.ctrlKey && e.key === "s") {
+      if (key === "s" && !inField) {
         e.preventDefault();
         handleSave();
       }
       // Ctrl+O - Open
-      if (e.ctrlKey && e.key === "o") {
+      if (key === "o" && !inField) {
         e.preventDefault();
         handleOpen();
       }
       // Ctrl+N - New file
-      if (e.ctrlKey && e.key === "n") {
+      if (key === "n" && !inField) {
         e.preventDefault();
         useEditorStore.getState().createNewFile();
       }
       // Ctrl+Z - Undo (handled by Monaco, but add fallback)
-      if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
-        // Let Monaco handle it if editor is focused
+      if (key === "z" && !e.shiftKey) {
         const activeElement = document.activeElement;
-        if (!activeElement?.closest(".monaco-editor")) {
+        if (!activeElement?.closest(".monaco-editor") && !inField) {
           e.preventDefault();
           useEditorStore.getState().undo();
         }
       }
       // Ctrl+Y or Ctrl+Shift+Z - Redo
-      if ((e.ctrlKey && e.key === "y") || (e.ctrlKey && e.shiftKey && e.key === "z")) {
+      if (key === "y" || (e.shiftKey && key === "z")) {
         const activeElement = document.activeElement;
-        if (!activeElement?.closest(".monaco-editor")) {
+        if (!activeElement?.closest(".monaco-editor") && !inField) {
           e.preventDefault();
           useEditorStore.getState().redo();
         }
@@ -216,6 +223,12 @@ function App() {
           <Editor />
           <Preview />
         </Split>
+        {aiPanelOpen && (
+          <AiPanel
+            onClose={() => setAiPanelOpen(false)}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        )}
       </div>
       <ServerStatus />
       {showUpdateNotification && updateInfo && (

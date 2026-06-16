@@ -30,6 +30,7 @@ A powerful offline UML diagram editor with Live Preview, Monaco Editor, and an e
 - **Export Options** - Export diagrams to SVG and PNG formats
 - **Zoom & Pan** - Navigate large diagrams with mouse wheel zoom and drag-to-pan
 - **Embedded PlantUML Server** - Works offline with bundled Java runtime and PlantUML server
+- **🤖 AI Assistant** - Generate diagrams from text, fix render errors, chat, and refactor — bring your own API key (OpenRouter / DeepSeek / OpenAI / Anthropic / any OpenAI-compatible endpoint)
 - **Multi-language Support** - English and Russian interfaces
 - **Dark/Light Themes** - Choose your preferred visual style
 - **Auto-save** - Never lose your work

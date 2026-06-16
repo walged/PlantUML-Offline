@@ -20,7 +20,9 @@
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .sidebar-tab:hover {
